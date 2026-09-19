@@ -1,26 +1,160 @@
 @import "tailwindcss";
 
+/* 設計代幣：亮色為暖紙色底＋墨黑文字，暗色為深炭底＋香檳金點綴。
+   台股慣例：紅漲(up)、綠跌(down) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f5f3ee;
+  --surface: #ffffff;
+  --surface-2: #faf9f6;
+  --line: rgba(24, 24, 32, 0.09);
+  --fg: #15151b;
+  --muted: #6f6f7a;
+  --accent: #8f6b1e;
+  --accent-soft: rgba(143, 107, 30, 0.1);
+  --up: #d92d3a;
+  --up-soft: rgba(217, 45, 58, 0.09);
+  --down: #0f9d63;
+  --down-soft: rgba(15, 157, 99, 0.1);
+  --shadow: 0 1px 2px rgba(20, 20, 30, 0.04), 0 10px 28px -14px rgba(20, 20, 30, 0.12);
+  --glow: radial-gradient(56rem 26rem at 50% -8%, rgba(180, 140, 60, 0.16), transparent 62%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0a0b0e;
+    --surface: #12141a;
+    --surface-2: #171a21;
+    --line: rgba(255, 255, 255, 0.07);
+    --fg: #ecebe6;
+    --muted: #8a8c96;
+    --accent: #d9b56d;
+    --accent-soft: rgba(217, 181, 109, 0.12);
+    --up: #ff5c66;
+    --up-soft: rgba(255, 92, 102, 0.12);
+    --down: #34d399;
+    --down-soft: rgba(52, 211, 153, 0.12);
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 14px 34px -18px rgba(0, 0, 0, 0.7);
+    --glow: radial-gradient(56rem 26rem at 50% -8%, rgba(217, 181, 109, 0.09), transparent 62%);
   }
 }
 
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-up: var(--up);
+  --color-up-soft: var(--up-soft);
+  --color-down: var(--down);
+  --color-down-soft: var(--down-soft);
+  --font-sans: var(--font-geist-sans), var(--font-noto-sans-tc), system-ui, sans-serif;
+  --font-serif: var(--font-noto-serif-tc), "Songti TC", serif;
+  --font-mono: var(--font-geist-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  background-image: var(--glow);
+  background-repeat: no-repeat;
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* 卡片：細邊框＋柔和陰影 */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  box-shadow: var(--shadow);
+}
+
+/* 區塊小標：小字、字距、灰色 */
+.label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* 數字對齊 */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* 即時更新的呼吸燈 */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--down) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+.live-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: var(--down);
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
+
+/* 輸入框 */
+.field {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.field::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+.field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 主要按鈕：香檳金漸層 */
+.btn-primary {
+  border-radius: 0.75rem;
+  padding: 0.6rem 1.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #16130a;
+  background: linear-gradient(135deg, #e6c882, #c9a04c);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 6px 16px -8px rgba(201, 160, 76, 0.7);
+  transition:
+    filter 0.15s,
+    transform 0.05s;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }

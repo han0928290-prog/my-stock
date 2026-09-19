@@ -7,24 +7,28 @@ import { User } from "@/models/user";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BCRYPT_ROUNDS = 12;
 
-// 註冊驗證碼（先寫死）。一定要在伺服器端檢查，前端的檢查可以被繞過
-const REGISTER_CODE = "love";
-
 export async function POST(request: NextRequest) {
+  // 註冊驗證碼放在環境變數 REGISTER_CODE，一定要在伺服器端檢查，前端的檢查可以被繞過。
+  // 沒設定時直接拒絕所有註冊（fail closed），避免誤開放。
+  const expectedCode = process.env.REGISTER_CODE;
+  if (!expectedCode) {
+    return Response.json({ error: "伺服器尚未設定註冊驗證碼（REGISTER_CODE）" }, { status: 500 });
+  }
+
   const body = await request.json().catch(() => null);
   const email = String(body?.email ?? "").trim().toLowerCase();
   const password = String(body?.password ?? "");
   const verifyCode = String(body?.verifyCode ?? "").trim();
 
-  if (verifyCode !== REGISTER_CODE) {
+  if (verifyCode !== expectedCode) {
     return Response.json({ error: "驗證碼錯誤" }, { status: 403 });
   }
 
   if (!EMAIL_PATTERN.test(email) || email.length > 254) {
     return Response.json({ error: "Email 格式錯誤" }, { status: 400 });
   }
-  if (password.length < 8) {
-    return Response.json({ error: "密碼至少 8 個字元" }, { status: 400 });
+  if (password.length < 6) {
+    return Response.json({ error: "密碼至少 6 個字元" }, { status: 400 });
   }
   // bcrypt 只處理前 72 bytes，超過的部分會被忽略，直接拒絕比較誠實
   if (Buffer.byteLength(password) > 72) {

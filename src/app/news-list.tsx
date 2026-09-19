@@ -30,24 +30,42 @@ export default function NewsList({ code }: { code: string }) {
   }, [code]);
 
   return (
-    <section>
-      <h2 className="mb-3 text-sm text-zinc-500">相關新聞（Yahoo奇摩股市）</h2>
+    <section className="card p-6 sm:p-8">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="font-serif text-lg font-bold">相關新聞</h2>
+        <span className="label">Yahoo奇摩股市</span>
+      </div>
+
       {error ? (
-        <p className="text-red-500">新聞載入失敗：{error}</p>
+        <p className="text-up">新聞載入失敗：{error}</p>
       ) : !items ? (
-        <p className="text-zinc-400">載入中…</p>
+        <div className="space-y-4 py-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-2">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-line" />
+              <div className="h-3 w-full animate-pulse rounded bg-line" />
+            </div>
+          ))}
+        </div>
       ) : items.length === 0 ? (
-        <p className="text-zinc-400">目前沒有相關新聞</p>
+        <p className="py-6 text-center text-muted">目前沒有相關新聞</p>
       ) : (
-        <ul className="divide-y divide-zinc-500/20">
+        <ul className="-mx-3 divide-y divide-line/70">
           {items.map((n) => (
-            <li key={n.link} className="py-3">
-              <a href={n.link} target="_blank" rel="noopener noreferrer" className="group block">
-                <span className="font-medium group-hover:underline">{n.title}</span>
+            <li key={n.link}>
+              <a
+                href={n.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group block rounded-xl px-3 py-4 transition hover:bg-surface-2"
+              >
+                <span className="font-medium leading-snug transition group-hover:text-accent">
+                  {n.title}
+                </span>
                 {n.summary && (
-                  <p className="mt-1 line-clamp-2 text-sm text-zinc-500">{n.summary}</p>
+                  <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted">{n.summary}</p>
                 )}
-                <span className="mt-1 block text-xs text-zinc-400">{timeAgo(n.publishedAt)}</span>
+                <span className="label mt-2 block">{timeAgo(n.publishedAt)}</span>
               </a>
             </li>
           ))}

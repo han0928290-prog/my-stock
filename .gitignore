@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 環境變數範本（只有變數名稱，沒有機密）可以 commit
+!.env.example
