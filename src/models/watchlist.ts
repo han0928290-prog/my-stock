@@ -18,6 +18,21 @@ const watchlistSchema = new mongoose.Schema(
         _id: false,
         code: { type: String, required: true },
         name: { type: String, required: true },
+        favorite: { type: Boolean, default: false },
+        note: { type: String, default: "" },
+        noteAt: { type: Date },
+        // 追蹤筆記時間軸：每筆有日期、分類、內容與進度狀態
+        timeline: [
+          {
+            date: { type: String, required: true },
+            category: { type: String, required: true },
+            text: { type: String, required: true },
+            status: { type: String, default: "待追蹤" },
+            dueDate: { type: String, default: "" }, // 預計完成日 YYYY-MM-DD，選填
+          },
+        ],
+        // 手動輸入的機構目標價
+        brokers: [{ institution: { type: String, required: true }, target: { type: Number, required: true }, date: { type: String, required: true } }],
       },
     ],
   },
@@ -25,6 +40,11 @@ const watchlistSchema = new mongoose.Schema(
 );
 
 export type WatchlistDoc = InferSchemaType<typeof watchlistSchema>;
+
+// 開發模式熱重載會保留舊的 model（schema 改了也不會更新），所以每次都重建；正式環境沿用快取
+if (process.env.NODE_ENV !== "production" && mongoose.models.Watchlist) {
+  mongoose.deleteModel("Watchlist");
+}
 
 export const Watchlist: mongoose.Model<WatchlistDoc> =
   mongoose.models.Watchlist ?? mongoose.model("Watchlist", watchlistSchema);
@@ -36,5 +56,22 @@ export async function getWatchlist(userId: string) {
     { $setOnInsert: { stocks: DEFAULT_STOCKS } },
     { upsert: true, returnDocument: "after" },
   ).lean();
-  return doc.stocks.map((s) => ({ code: s.code, name: s.name }));
+  return doc.stocks.map((s) => ({ code: s.code, name: s.name, favorite: !!s.favorite,
+    note: s.note ?? "",
+    noteAt: s.noteAt ? s.noteAt.toISOString().slice(0, 10) : null,
+    timeline: (s.timeline ?? []).map((t) => ({
+      id: String(t._id),
+      date: t.date,
+      category: t.category,
+      text: t.text,
+      status: t.status ?? "待追蹤",
+      dueDate: t.dueDate ?? "",
+    })),
+    brokers: (s.brokers ?? []).map((b) => ({
+      id: String(b._id),
+      institution: b.institution,
+      target: b.target,
+      date: b.date,
+    })),
+  }));
 }

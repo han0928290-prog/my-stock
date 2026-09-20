@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Brand from "./brand";
-import { getJson, HttpError, type AuthUser, type Realtime, type WatchItem } from "./lib";
+import { getJson, HttpError, type Analyst, type AuthUser, type Realtime, type WatchItem } from "./lib";
+import { THEME_ORDER } from "@/lib/themes";
 import SettingsDialog from "./settings-dialog";
-import StockCard from "./stock-card";
-import StockDetail from "./stock-detail";
+import StockRow from "./stock-row";
+import StockPage from "./stock-page";
 import { useAiAnalysis } from "./use-ai-analysis";
 
 // mis 約 5 秒內限 3 次請求；所有股票合併成 1 次請求，5 秒輪詢很安全
@@ -20,6 +21,7 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [analysts, setAnalysts] = useState<Record<string, Analyst | null>>({});
   const [input, setInput] = useState("");
   const [adding, setAdding] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -76,24 +78,41 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
     };
   }, [codes, handleError]);
 
-  // 選中的股票被移除（或還沒選）時，退回清單第一檔
-  const selected =
-    stocks?.find((s) => s.code === selectedCode)?.code ?? stocks?.[0]?.code ?? null;
+  useEffect(() => {
+    if (!codes) return;
+    getJson<{ stats: Record<string, Analyst | null> }>(`/api/target?codes=${codes}`)
+      .then((r) => setAnalysts((prev) => ({ ...prev, ...r.stats })))
+      .catch(() => {});
+  }, [codes]);
+
+  // 選中的股票被移除時自動回到清單
+  const selected = stocks?.find((s) => s.code === selectedCode)?.code ?? null;
+
+  // 分組：我的最愛在最上面，接著自訂題材（依 themes.ts 順序），再來是產業別，「其他」排最後
+  const favorites = (stocks ?? []).filter((s) => s.favorite);
+  const groups = new Map<string, WatchItem[]>();
+  for (const s of stocks ?? []) groups.set(s.industry, [...(groups.get(s.industry) ?? []), s]);
+  const rank = (g: string) => {
+    const i = THEME_ORDER.indexOf(g);
+    return i >= 0 ? i : g === "其他" ? 1000 : 500;
+  };
+  const industries = [...groups.keys()].sort(
+    (a, b) => rank(a) - rank(b) || a.localeCompare(b, "zh-TW"),
+  );
 
   async function addStock(e: React.FormEvent) {
     e.preventDefault();
-    const code = input.trim();
-    if (!code) return;
+    const query = input.trim();
+    if (!query) return;
     setAdding(true);
     setListError(null);
     try {
       const r = await getJson<{ stocks: WatchItem[] }>("/api/watchlist", {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ query }),
       });
       setStocks(r.stocks);
-      setSelectedCode(r.stocks[r.stocks.length - 1].code);
       setInput("");
     } catch (err) {
       handleError(err as Error);
@@ -103,13 +122,63 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
     }
   }
 
-  // 卡片下方的「AI 分析」：選取該股票、呼叫後端 API，並捲動到結果區
-  function analyzeStock(code: string) {
-    setSelectedCode(code);
-    void ai.run(code);
-    if (hasKey) {
-      setTimeout(() => document.getElementById("ai-panel")?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+  async function toggleFavorite(code: string, favorite: boolean) {
+    setListError(null);
+    try {
+      const r = await getJson<{ stocks: WatchItem[] }>(`/api/watchlist/${code}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ favorite }),
+      });
+      setStocks(r.stocks);
+    } catch (err) {
+      handleError(err as Error);
+      setListError((err as Error).message);
     }
+  }
+
+  async function saveNote(code: string, note: string) {
+    const r = await getJson<{ stocks: WatchItem[] }>(`/api/watchlist/${code}`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ note }),
+    }).catch((err: Error) => {
+      handleError(err);
+      throw err;
+    });
+    setStocks(r.stocks);
+  }
+
+  async function addBroker(code: string, input: { institution: string; target: number; date: string }) {
+    const r = await getJson<{ stocks: WatchItem[] }>(`/api/watchlist/${code}/brokers`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(input),
+    }).catch((err: Error) => {
+      handleError(err);
+      throw err;
+    });
+    setStocks(r.stocks);
+  }
+
+  async function removeBroker(code: string, id: string) {
+    const r = await getJson<{ stocks: WatchItem[] }>(`/api/watchlist/${code}/brokers/${id}`, {
+      method: "DELETE",
+    }).catch((err: Error) => {
+      handleError(err);
+      throw err;
+    });
+    setStocks(r.stocks);
+  }
+
+  async function timelineCall(code: string, path: string, init: RequestInit) {
+    const r = await getJson<{ stocks: WatchItem[] }>(`/api/watchlist/${code}/timeline${path}`, init).catch(
+      (err: Error) => {
+        handleError(err);
+        throw err;
+      },
+    );
+    setStocks(r.stocks);
   }
 
   async function removeStock(code: string) {
@@ -125,10 +194,24 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
     }
   }
 
+  const renderRow = (s: WatchItem) => (
+    <StockRow
+      key={s.code}
+      code={s.code}
+      name={s.name}
+      favorite={s.favorite}
+      quote={quotes[s.code]}
+      target={analysts[s.code] === undefined ? undefined : (analysts[s.code]?.target ?? null)}
+      onOpen={() => setSelectedCode(s.code)}
+      onToggleFavorite={() => toggleFavorite(s.code, !s.favorite)}
+      onRemove={() => removeStock(s.code)}
+    />
+  );
+
   return (
     <>
       <header className="sticky top-0 z-20 border-b border-line bg-bg/75 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-6">
+        <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between gap-4 px-6">
           <Brand />
           <div className="flex items-center gap-3 text-sm">
             <span className="hidden items-center gap-2 text-muted sm:flex" title={error ?? undefined}>
@@ -166,86 +249,116 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl space-y-8 px-6 py-8">
-        <section>
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="font-serif text-xl font-bold">追蹤清單</h2>
-              <p className="mt-0.5 text-sm text-muted">
-                {stocks ? `${stocks.length} 檔` : "載入中…"}・報價每 {POLL_MS / 1000} 秒更新
-              </p>
-            </div>
-
-            <form onSubmit={addStock} className="flex items-center gap-2">
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="輸入股票代號，例如 2603"
-                maxLength={8}
-                aria-label="股票代號"
-                className="field w-52"
-              />
-              <button type="submit" disabled={adding || !input.trim()} className="btn-primary whitespace-nowrap">
-                {adding ? "加入中…" : "加入追蹤"}
-              </button>
-            </form>
-          </div>
-
-          {listError && (
-            <p role="alert" className="mb-4 rounded-lg bg-up-soft px-3 py-2 text-sm text-up">
-              {listError}
-            </p>
-          )}
-
-          {!stocks ? (
-            !listError && (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className="card h-44 animate-pulse" />
-                ))}
-              </div>
-            )
-          ) : stocks.length === 0 ? (
-            <div className="card border-dashed p-12 text-center text-muted">
-              追蹤清單是空的，在上方輸入股票代號加入第一檔吧。
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-              {stocks.map((s) => (
-                <StockCard
-                  key={s.code}
-                  code={s.code}
-                  name={s.name}
-                  quote={quotes[s.code]}
-                  ai={ai.states[s.code]}
-                  selected={selected === s.code}
-                  onSelect={() => setSelectedCode(s.code)}
-                  onRemove={() => removeStock(s.code)}
-                  onAnalyze={() => analyzeStock(s.code)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {selected && (
-          <StockDetail
+      <main className={`mx-auto w-full space-y-8 px-6 py-8 ${selected ? "max-w-5xl" : "max-w-3xl"}`}>
+        {selected ? (
+          <StockPage
             key={selected}
-            code={selected}
+            item={stocks!.find((x) => x.code === selected)!}
             quote={quotes[selected]}
+            analyst={analysts[selected]}
             ai={ai.states[selected]}
             hasKey={hasKey}
+            onBack={() => setSelectedCode(null)}
+            onToggleFavorite={() => {
+              const it = stocks!.find((x) => x.code === selected)!;
+              void toggleFavorite(it.code, !it.favorite);
+            }}
+            onSaveNote={(note) => saveNote(selected, note)}
+            onAddEntry={(e) =>
+              timelineCall(selected, "", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(e) })
+            }
+            onSetEntryStatus={(id, status) =>
+              timelineCall(selected, `/${id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ status }) })
+            }
+            onSetEntryDue={(id, dueDate) =>
+              timelineCall(selected, `/${id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ dueDate }) })
+            }
+            onRemoveEntry={(id) => timelineCall(selected, `/${id}`, { method: "DELETE" })}
+            onAddBroker={(b) => addBroker(selected, b)}
+            onRemoveBroker={(id) => removeBroker(selected, id)}
             onAnalyze={() => ai.run(selected)}
             onOpenSettings={openSettings}
           />
+        ) : (
+          <section>
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-xl font-bold">追蹤清單</h2>
+                <p className="mt-0.5 text-sm text-muted">
+                  {stocks ? `${stocks.length} 檔` : "載入中…"}・報價每 {POLL_MS / 1000} 秒更新
+                </p>
+              </div>
+
+              <form onSubmit={addStock} className="flex items-center gap-2">
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="輸入代號或名稱，例如 2603、長榮"
+                  maxLength={20}
+                  aria-label="股票代號或名稱"
+                  className="field w-64"
+                />
+                <button type="submit" disabled={adding || !input.trim()} className="btn-primary whitespace-nowrap">
+                  {adding ? "加入中…" : "加入追蹤"}
+                </button>
+              </form>
+            </div>
+
+            {listError && (
+              <p role="alert" className="mb-4 rounded-lg bg-up-soft px-3 py-2 text-sm text-up">
+                {listError}
+              </p>
+            )}
+
+            {!stocks ? (
+              !listError && (
+                <div className="space-y-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="card h-16 animate-pulse" />
+                  ))}
+                </div>
+              )
+            ) : stocks.length === 0 ? (
+              <div className="card border-dashed p-12 text-center text-muted">
+                追蹤清單是空的，在上方輸入股票代號或名稱加入第一檔吧。
+              </div>
+            ) : (
+              <div className="space-y-8">
+                <Group title="★ 我的最愛" accent>
+                  {favorites.length > 0 ? (
+                    favorites.map(renderRow)
+                  ) : (
+                    <div className="card border-dashed px-4 py-5 text-center text-sm text-muted">
+                      還沒有我的最愛，點下面任一檔股票右邊的 ☆ 加進來。
+                    </div>
+                  )}
+                </Group>
+                <hr className="border-line" />
+                {industries.map((ind) => (
+                  <Group key={ind} title={ind}>
+                    {groups.get(ind)!.map(renderRow)}
+                  </Group>
+                ))}
+              </div>
+            )}
+          </section>
         )}
       </main>
 
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
-      <footer className="mx-auto w-full max-w-6xl px-6 pb-10 text-xs leading-relaxed text-muted">
+      <footer className="mx-auto w-full max-w-3xl px-6 pb-10 text-xs leading-relaxed text-muted">
         資料來源：證交所 mis、FinMind、Yahoo奇摩股市。報價可能有延遲，僅供參考，不構成投資建議。
       </footer>
     </>
+  );
+}
+
+function Group({ title, accent, children }: { title: string; accent?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className={`mb-3 text-sm font-bold ${accent ? "text-amber-600" : "text-muted"}`}>{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
   );
 }

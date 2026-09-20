@@ -1,4 +1,33 @@
-export type WatchItem = { code: string; name: string };
+export type WatchItem = {
+  code: string;
+  name: string;
+  favorite: boolean;
+  industry: string;
+  note: string;
+  noteAt: string | null; // YYYY-MM-DD
+  brokers: ManualBroker[];
+  timeline: TimelineEntry[];
+};
+
+export type TimelineEntry = {
+  id: string;
+  date: string;
+  category: string;
+  text: string;
+  status: string;
+  dueDate: string; // 預計完成日，沒填是空字串
+};
+
+export type ManualBroker = { id: string; institution: string; target: number; date: string };
+
+export type Analyst = {
+  target: number | null;
+  high: number | null;
+  low: number | null;
+  median: number | null;
+  count: number | null;
+  pe: number | null;
+};
 
 export type AuthUser = { id: string; email: string };
 
