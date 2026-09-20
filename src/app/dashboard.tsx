@@ -6,7 +6,7 @@ import { getJson, HttpError, type Analyst, type AuthUser, type Realtime, type Wa
 import { THEME_ORDER } from "@/lib/themes";
 import SettingsDialog from "./settings-dialog";
 import StockRow from "./stock-row";
-import StockPage from "./stock-page";
+import StockPage, { type Tab } from "./stock-page";
 import { useAiAnalysis } from "./use-ai-analysis";
 
 // mis 約 5 秒內限 3 次請求；所有股票合併成 1 次請求，5 秒輪詢很安全
@@ -21,6 +21,7 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("總覽");
   const [analysts, setAnalysts] = useState<Record<string, Analyst | null>>({});
   const [input, setInput] = useState("");
   const [adding, setAdding] = useState(false);
@@ -99,6 +100,17 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
   const industries = [...groups.keys()].sort(
     (a, b) => rank(a) - rank(b) || a.localeCompare(b, "zh-TW"),
   );
+
+  // 上一檔／下一檔的順序 = 清單上分組後的順序（每檔只算一次，不含「我的最愛」重複列出的那一份）
+  const ordered = industries.flatMap((g) => groups.get(g) ?? []);
+  const at = ordered.findIndex((s) => s.code === selected);
+  const prevStock = at > 0 ? ordered[at - 1] : null;
+  const nextStock = at >= 0 && at < ordered.length - 1 ? ordered[at + 1] : null;
+
+  function goTo(code: string) {
+    setSelectedCode(code); // 分頁維持不變
+    window.scrollTo({ top: 0 });
+  }
 
   async function addStock(e: React.FormEvent) {
     e.preventDefault();
@@ -202,7 +214,10 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
       favorite={s.favorite}
       quote={quotes[s.code]}
       target={analysts[s.code] === undefined ? undefined : (analysts[s.code]?.target ?? null)}
-      onOpen={() => setSelectedCode(s.code)}
+      onOpen={() => {
+        setTab("總覽"); // 從清單點進來一律從總覽開始
+        setSelectedCode(s.code);
+      }}
       onToggleFavorite={() => toggleFavorite(s.code, !s.favorite)}
       onRemove={() => removeStock(s.code)}
     />
@@ -259,6 +274,12 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
             ai={ai.states[selected]}
             hasKey={hasKey}
             onBack={() => setSelectedCode(null)}
+            tab={tab}
+            onTabChange={setTab}
+            prev={prevStock}
+            next={nextStock}
+            position={{ index: at + 1, total: ordered.length }}
+            onNavigate={goTo}
             onToggleFavorite={() => {
               const it = stocks!.find((x) => x.code === selected)!;
               void toggleFavorite(it.code, !it.favorite);

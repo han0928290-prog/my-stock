@@ -21,7 +21,7 @@ import StockDetail from "./stock-detail";
 import type { AiState } from "./use-ai-analysis";
 
 const TABS = ["總覽", "獲利與 EPS", "目標價", "行情與籌碼", "產能與擴廠", "追蹤筆記"] as const;
-type Tab = (typeof TABS)[number];
+export type Tab = (typeof TABS)[number];
 
 type Props = {
   item: WatchItem;
@@ -30,6 +30,13 @@ type Props = {
   ai: AiState | undefined;
   hasKey: boolean;
   onBack: () => void;
+  // 分頁狀態由外層保管，切換上一檔／下一檔時才能停在同一個分頁（例如一路比較各家的 EPS）
+  tab: Tab;
+  onTabChange: (t: Tab) => void;
+  prev: WatchItem | null;
+  next: WatchItem | null;
+  position: { index: number; total: number };
+  onNavigate: (code: string) => void;
   onToggleFavorite: () => void;
   onSaveNote: (note: string) => Promise<void>;
   onAddEntry: (e: { date: string; category: string; text: string; status: string; dueDate?: string }) => Promise<void>;
@@ -52,6 +59,12 @@ export default function StockPage({
   ai,
   hasKey,
   onBack,
+  tab,
+  onTabChange,
+  prev,
+  next,
+  position,
+  onNavigate,
   onToggleFavorite,
   onSaveNote,
   onAddEntry,
@@ -63,7 +76,7 @@ export default function StockPage({
   onAnalyze,
   onOpenSettings,
 }: Props) {
-  const [tab, setTab] = useState<Tab>("總覽");
+  const setTab = onTabChange;
   const price = quote?.price ?? null;
   const target = analyst?.target ?? null;
   const growth = price && target ? ((target - price) / price) * 100 : null;
@@ -74,6 +87,14 @@ export default function StockPage({
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-muted transition hover:text-fg">
         ← 返回清單
       </button>
+
+      <nav aria-label="切換股票" className="flex items-center justify-between gap-3">
+        <NavButton dir="prev" stock={prev} onGo={onNavigate} />
+        <span className="num shrink-0 text-xs text-muted">
+          {position.index} / {position.total}
+        </span>
+        <NavButton dir="next" stock={next} onGo={onNavigate} />
+      </nav>
 
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -211,6 +232,32 @@ export default function StockPage({
         />
       )}
     </div>
+  );
+}
+
+// 上一檔／下一檔按鈕：顯示對方的名稱，沒有時（清單頭尾）停用
+function NavButton({ dir, stock, onGo }: { dir: "prev" | "next"; stock: WatchItem | null; onGo: (code: string) => void }) {
+  const isPrev = dir === "prev";
+  return (
+    <button
+      onClick={() => stock && onGo(stock.code)}
+      disabled={!stock}
+      aria-label={stock ? `${isPrev ? "上一檔" : "下一檔"}：${stock.name}` : isPrev ? "已經是第一檔" : "已經是最後一檔"}
+      className={`flex min-w-0 max-w-[45%] items-center gap-2 rounded-xl border border-line bg-surface px-3.5 py-2 text-sm transition enabled:hover:border-accent enabled:hover:shadow-sm disabled:opacity-40 ${
+        isPrev ? "" : "flex-row-reverse text-right"
+      }`}
+    >
+      <span aria-hidden className="text-muted">
+        {isPrev ? "←" : "→"}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[0.65rem] leading-none text-muted">{isPrev ? "上一檔" : "下一檔"}</span>
+        <span className="mt-1 block truncate font-medium">
+          {stock ? stock.name : "—"}
+          {stock && <span className="num ml-1.5 text-xs font-normal text-muted">{stock.code}</span>}
+        </span>
+      </span>
+    </button>
   );
 }
 
