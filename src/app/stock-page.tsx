@@ -12,6 +12,11 @@ import {
   type TimelineEntry,
   type WatchItem,
 } from "./lib";
+import type { Estimates } from "@/lib/estimates";
+import EpsChart, { type EpsChartRow } from "./eps-chart";
+import EstimatesCard from "./estimates-card";
+import PerChart from "./per-chart";
+import RevenueChart from "./revenue-chart";
 import StockDetail from "./stock-detail";
 import type { AiState } from "./use-ai-analysis";
 
@@ -127,6 +132,8 @@ export default function StockPage({
             <span className={`num font-bold ${trendColor(growth)}`}>{signed(growth)}</span>
           </div>
 
+          <PerChart code={item.code} />
+
           <div className="card px-5 py-4">
             <div className="flex items-center justify-between">
               <span className="font-bold">備註</span>
@@ -232,11 +239,16 @@ const pct = (n: number | null) => (n === null ? "—" : `${fmt(n, 1)}%`);
 function EpsTab({ code, timeline, onAdd, onSetStatus, onSetDue, onRemove }: EntryHandlers & { code: string; timeline: TimelineEntry[] }) {
   const [rows, setRows] = useState<EpsRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // undefined = 載入中，null = 查無分析師預估
+  const [est, setEst] = useState<Estimates | null | undefined>(undefined);
 
   useEffect(() => {
     getJson<{ data: EpsRow[] }>(`/api/finmind/eps?code=${code}`)
       .then((r) => setRows(r.data))
       .catch((e: Error) => setError(e.message));
+    getJson<{ estimates: Estimates | null }>(`/api/estimates?code=${code}`)
+      .then((r) => setEst(r.estimates))
+      .catch(() => setEst(null)); // 預估載入失敗不影響實際財報的顯示
   }, [code]);
 
   if (error) return <p className="text-up">獲利資料載入失敗：{error}</p>;
@@ -255,6 +267,23 @@ function EpsTab({ code, timeline, onAdd, onSetStatus, onSetDue, onRemove }: Entr
   const ttm = last4.length === 4 && last4.every((r) => r.eps !== null) ? last4.reduce((a, r) => a + (r.eps ?? 0), 0) : null;
   const max = Math.max(...rows.map((r) => Math.abs(r.eps ?? 0)), 0.01);
 
+  // 圖表資料：實際財報 + 分析師預估的「未來季度」（結束日晚於最新已公布季；已公布的季度不當預估）
+  const estRows: EpsChartRow[] = (est?.periods ?? [])
+    .filter((p) => p.key.endsWith("q") && p.eps !== null && p.endDate !== null && p.endDate > latest.date)
+    .map((p) => ({
+      date: p.endDate as string,
+      eps: p.eps,
+      grossMargin: null,
+      estimate: true,
+      epsLow: p.epsLow,
+      epsHigh: p.epsHigh,
+      analysts: p.analysts,
+    }));
+  const chartRows: EpsChartRow[] = [
+    ...rows.map((r) => ({ date: r.date, eps: r.eps, grossMargin: r.grossMargin })),
+    ...estRows,
+  ];
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -263,6 +292,18 @@ function EpsTab({ code, timeline, onAdd, onSetStatus, onSetDue, onRemove }: Entr
         <Stat label="最新毛利率" value={pct(latest.grossMargin)} />
         <Stat label="最新營業利益率" value={pct(latest.operatingMargin)} />
       </div>
+
+      <EpsChart rows={chartRows} code={code} />
+
+      {est === undefined ? (
+        <div className="card h-48 animate-pulse" />
+      ) : est === null ? (
+        <div className="card px-5 py-4 text-sm text-muted">查無分析師預估資料（追蹤這檔的分析師太少，或 Yahoo 沒有收錄）。</div>
+      ) : (
+        <EstimatesCard est={est} latestActualDate={latest.date} />
+      )}
+
+      <RevenueChart code={code} />
 
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[34rem] text-sm">

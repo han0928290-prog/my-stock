@@ -1,7 +1,8 @@
 // 證交所 mis 即時報價：非正式公開文件的 API，格式可能變動；約 5 秒內最多 3 次請求
 const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
 
-export const MAX_CODES = 20;
+// 追蹤清單上限，同時也是即時報價一次查詢的檔數上限（mis 實測一次查 50 檔、100 筆正常）
+export const MAX_CODES = 50;
 export const CODE_PATTERN = /^[0-9A-Za-z]{1,8}$/;
 
 type MisRow = Record<string, string | undefined>;
