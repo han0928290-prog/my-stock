@@ -15,6 +15,7 @@ import {
 import type { Estimates } from "@/lib/estimates";
 import EpsChart, { type EpsChartRow } from "./eps-chart";
 import EstimatesCard from "./estimates-card";
+import IntradayChart from "./intraday-chart";
 import PerChart from "./per-chart";
 import RevenueChart from "./revenue-chart";
 import StockDetail from "./stock-detail";
@@ -147,6 +148,8 @@ export default function StockPage({
           </div>
           {analyst === undefined && <p className="text-sm text-muted">分析師資料載入中…</p>}
           {analyst === null && <p className="text-sm text-muted">查不到這檔的分析師目標價與本益比。</p>}
+
+          <IntradayChart code={item.code} />
 
           <div className="card px-5 py-4 text-sm">
             <span className="text-muted">目標價潛在漲跌幅：</span>
