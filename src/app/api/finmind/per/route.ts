@@ -1,8 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getTokenSession, unauthorized } from "@/lib/auth";
-import { finmind } from "@/lib/finmind";
-
-type Row = { date: string; PER: number };
+import { getDailyPer } from "@/lib/per";
 
 // 近一年的每日本益比（FinMind TaiwanStockPER）。虧損時 PER 為 0，視為沒有資料（null）
 export async function GET(request: NextRequest) {
@@ -14,9 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const rows = await finmind<Row>("TaiwanStockPER", code, 365, 3600);
-    const data = rows.map((r) => ({ date: r.date, per: r.PER > 0 ? r.PER : null }));
-    return Response.json({ source: "FinMind", code, data });
+    return Response.json({ source: "FinMind", code, data: await getDailyPer(code) });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "FinMind request failed" }, { status: 502 });
   }
