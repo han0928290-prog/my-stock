@@ -7,17 +7,25 @@ type YahooChart = {
       | {
           meta: { chartPreviousClose?: number; previousClose?: number; gmtoffset?: number };
           timestamp?: number[];
-          indicators: { quote: { close: (number | null)[]; volume: (number | null)[] }[] };
+          indicators: {
+            quote: {
+              open: (number | null)[];
+              high: (number | null)[];
+              low: (number | null)[];
+              close: (number | null)[];
+              volume: (number | null)[];
+            }[];
+          };
         }[]
       | null;
   };
 };
 
-// 當日 5 分 K 走勢（Yahoo Finance chart API，非官方）。上市 .TW、上櫃 .TWO 都試，取有資料的那個
+// 當日 1 分 K 走勢（Yahoo Finance chart API，非官方）。上市 .TW、上櫃 .TWO 都試，取有資料的那個
 async function fetchIntraday(code: string) {
   for (const suffix of ["TW", "TWO"]) {
     const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${code}.${suffix}?interval=5m&range=1d`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${code}.${suffix}?interval=1m&range=1d`,
       { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 30 } },
     );
     if (!res.ok) continue;
@@ -26,14 +34,27 @@ async function fetchIntraday(code: string) {
     if (!r?.timestamp) continue;
 
     const offset = r.meta.gmtoffset ?? 28800;
-    const close = r.indicators.quote[0]?.close ?? [];
-    const volume = r.indicators.quote[0]?.volume ?? [];
+    const q = r.indicators.quote[0];
+    const open = q?.open ?? [];
+    const high = q?.high ?? [];
+    const low = q?.low ?? [];
+    const close = q?.close ?? [];
+    const volume = q?.volume ?? [];
     const points = r.timestamp
       .map((t, i) => {
         // 換成台灣當地時間 HH:mm
         const d = new Date((t + offset) * 1000);
         const time = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
-        return { time, price: close[i] ?? null, volume: volume[i] ?? null };
+        const price = close[i] ?? null;
+        // 偶爾只有收盤價，開高低缺值時用收盤價補
+        return {
+          time,
+          price,
+          open: open[i] ?? price,
+          high: high[i] ?? price,
+          low: low[i] ?? price,
+          volume: volume[i] ?? null,
+        };
       })
       .filter((p) => p.price !== null);
     return { prevClose: r.meta.chartPreviousClose ?? r.meta.previousClose ?? null, points };
