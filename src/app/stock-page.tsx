@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CATEGORIES, STATUSES } from "@/lib/timeline";
+import { CATEGORIES, DUE_CATEGORIES, STATUSES } from "@/lib/timeline";
 import {
   fmt,
   getJson,
@@ -491,8 +491,6 @@ const statusCls = (st: string) =>
 const statusDot = (st: string) =>
   st === "符合預期" ? "bg-down" : st === "落後" ? "bg-up" : st === "超前" ? "bg-accent" : "bg-muted/50";
 
-// 這些分類才有「預計完成日」
-const DUE_CATEGORIES: string[] = ["產能", "擴廠"];
 
 type EntryHandlers = {
   onAdd: Props["onAddEntry"];

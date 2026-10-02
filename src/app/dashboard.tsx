@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import AiNoteImport from "./ai-note-import";
 import Brand from "./brand";
 import { getJson, HttpError, type Analyst, type AuthUser, type Realtime, type WatchItem } from "./lib";
 import { THEME_ORDER } from "@/lib/themes";
@@ -438,6 +439,18 @@ export default function Dashboard({ user, onLogout }: { user: AuthUser; onLogout
                     </button>
                   </form>
                 </div>
+
+                {stocks && stocks.length > 0 && (
+                  <div className="mb-6">
+                    <AiNoteImport
+                      stocks={stocks}
+                      onAdd={(code, e) =>
+                        timelineCall(code, "", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(e) })
+                      }
+                      onOpenSettings={openSettings}
+                    />
+                  </div>
+                )}
 
                 {listError && (
                   <p role="alert" className="mb-4 rounded-lg bg-up-soft px-3 py-2 text-sm text-up">

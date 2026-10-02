@@ -36,7 +36,7 @@ const SYSTEM_PROMPT = `你是一位謹慎的台股分析助理。使用者會提
 只輸出一個 JSON 物件，格式如下，不要有其他文字：
 {"verdict":"bullish|bearish|neutral","confidence":"high|medium|low","summary":"一到兩句的總結","bullishFactors":["..."],"bearishFactors":["..."]}`;
 
-function clip(s: unknown, max: number) {
+export function clip(s: unknown, max: number) {
   return typeof s === "string" ? s.trim().slice(0, max) : "";
 }
 
@@ -60,7 +60,20 @@ export function normalizeAnalysis(raw: unknown): Analysis | null {
   };
 }
 
-export async function callOpenAI(apiKey: string, model: string, userContent: string) {
+// 一則 user 訊息可以是純文字，也可以是文字＋圖片／PDF 的多段內容（OpenAI Chat Completions 格式）
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+  | { type: "file"; file: { filename: string; file_data: string } };
+
+// 呼叫 OpenAI 並要求回傳 JSON 物件；錯誤統一轉成中文的 OpenAIError
+export async function requestOpenAIJson(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userContent: string | ContentPart[],
+  timeoutMs = 60_000,
+): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(OPENAI_URL, {
@@ -69,12 +82,12 @@ export async function callOpenAI(apiKey: string, model: string, userContent: str
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
         response_format: { type: "json_object" },
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     const timeout = e instanceof Error && e.name === "TimeoutError";
@@ -94,14 +107,15 @@ export async function callOpenAI(apiKey: string, model: string, userContent: str
     throw new OpenAIError(`OpenAI 回應錯誤（${res.status}）${detail ? "：" + detail : ""}`, 502);
   }
 
-  const content = body?.choices?.[0]?.message?.content;
-  let parsed: unknown = null;
   try {
-    parsed = JSON.parse(content);
+    return JSON.parse(body?.choices?.[0]?.message?.content);
   } catch {
-    // 落到下面的統一錯誤
+    throw new OpenAIError("AI 回傳的格式無法解析，請再試一次", 502);
   }
-  const analysis = normalizeAnalysis(parsed);
+}
+
+export async function callOpenAI(apiKey: string, model: string, userContent: string) {
+  const analysis = normalizeAnalysis(await requestOpenAIJson(apiKey, model, SYSTEM_PROMPT, userContent));
   if (!analysis) throw new OpenAIError("AI 回傳的格式無法解析，請再試一次", 502);
   return analysis;
 }

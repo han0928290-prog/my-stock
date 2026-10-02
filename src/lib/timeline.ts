@@ -4,3 +4,6 @@ export const STATUSES = ["待追蹤", "符合預期", "超前", "落後"] as con
 
 export type Category = (typeof CATEGORIES)[number];
 export type Status = (typeof STATUSES)[number];
+
+// 這些分類才有「預計完成日」
+export const DUE_CATEGORIES: readonly string[] = ["產能", "擴廠"];

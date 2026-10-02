@@ -35,7 +35,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
       <div>
         <h2 className="font-serif text-xl font-bold">設定</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted">
-          AI 分析使用你自己的 OpenAI API Key，費用由你的 OpenAI 帳戶負擔。
+          AI 分析與 AI 擷取筆記使用你自己的 OpenAI API Key，費用由你的 OpenAI 帳戶負擔。
         </p>
       </div>
 
@@ -73,7 +73,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
       </label>
 
       <div className="rounded-xl bg-surface-2 p-3.5 text-xs leading-relaxed text-muted">
-        Key 只會存在這個瀏覽器的 localStorage，不會存到我們的資料庫。每次分析時，Key 會經過本站伺服器轉送給
+        Key 只會存在這個瀏覽器的 localStorage，不會存到我們的資料庫。每次使用 AI 時，Key 會經過本站伺服器轉送給
         OpenAI，伺服器不會儲存或記錄它。請勿在共用電腦上使用，離開前可按「清除金鑰」。
       </div>
 
